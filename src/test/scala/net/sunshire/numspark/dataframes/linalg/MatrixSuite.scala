@@ -8,7 +8,7 @@ import scala.math;
 
 class MatrixSuite extends FunSuite with SharedSparkContext {
 
-  test("dot - self dot") {
+  test("dot - self vector dot") {
     val sqlContext: SQLContext = new SQLContext(sc);
     import sqlContext.implicits._;
 
@@ -28,7 +28,7 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
     assert(dot.getAs[Double]("dot") == 5.0);
   }
 
-  test("dot - empty dot") {
+  test("dot - empty vector dot") {
     val sqlContext: SQLContext = new SQLContext(sc);
     import sqlContext.implicits._;
 
@@ -46,7 +46,7 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
     assert(dotsCount == 0);
   }
 
-  test("dot - normal dot") {
+  test("dot - vector dot") {
     val sqlContext: SQLContext = new SQLContext(sc);
     import sqlContext.implicits._;
 
@@ -71,6 +71,46 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
     assert(dot.getAs[String]("row") == "0");
     assert(dot.getAs[String]("col") == "0");
     assert(dot.getAs[Double]("dot") == 11.0);
+  }
+
+  test("dot - matrix dot") {
+    val sqlContext: SQLContext = new SQLContext(sc);
+    import sqlContext.implicits._;
+
+    val rdd1 = sc.parallelize(
+      Array(
+        ("0", "0", 1.0),
+        ("0", "1", 2.0),
+        ("1", "0", 3.0),
+        ("1", "1", 4.0)
+      )
+    );
+    val rdd2 = sc.parallelize(
+      Array(
+        ("0", "0", 5.0),
+        ("0", "1", 6.0),
+        ("1", "0", 7.0),
+        ("1", "1", 8.0)
+      )
+    );
+    val (df1, df2) = (rdd1.toDF("i", "j", "v"), rdd2.toDF("i", "j", "v"));
+    val dots = matrix.dot(
+      sqlContext, df1, df2, ("i", "j", "v"), ("i", "j", "v")
+    );
+    assert(dots.count == 4);
+    val collected = dots.orderBy($"row", $"col").collect;
+    assert(collected(0).getAs[String]("row") == "0");
+    assert(collected(0).getAs[String]("col") == "0");
+    assert(collected(0).getAs[Double]("dot") == 19.0);
+    assert(collected(1).getAs[String]("row") == "0");
+    assert(collected(1).getAs[String]("col") == "1");
+    assert(collected(1).getAs[Double]("dot") == 22.0);
+    assert(collected(2).getAs[String]("row") == "1");
+    assert(collected(2).getAs[String]("col") == "0");
+    assert(collected(2).getAs[Double]("dot") == 43.0);
+    assert(collected(3).getAs[String]("row") == "1");
+    assert(collected(3).getAs[String]("col") == "1");
+    assert(collected(3).getAs[Double]("dot") == 50.0);
   }
 
   test("norm - invalid norm") {
