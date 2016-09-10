@@ -6,7 +6,7 @@ import org.apache.spark.sql.SQLContext;
 import org.scalatest.FunSuite;
 import scala.math;
 
-class VectorsSuite extends FunSuite with SharedSparkContext {
+class MatrixSuite extends FunSuite with SharedSparkContext {
 
   test("dot - self dot") {
     val sqlContext: SQLContext = new SQLContext(sc);
@@ -19,8 +19,8 @@ class VectorsSuite extends FunSuite with SharedSparkContext {
       )
     );
     val df = rdd.toDF("i", "j", "v");
-    val dots = vectors.dot(
-      sqlContext, df, df, ("i", "j", "v"), ("i", "j", "v")
+    val dots = matrix.dot(
+      sqlContext, df, df, ("i", "j", "v"), ("j", "i", "v")
     ).collect;
     val dot = dots(0);
     assert(dot.getAs[String]("row") == "0");
@@ -40,8 +40,8 @@ class VectorsSuite extends FunSuite with SharedSparkContext {
     );
     val df = rdd.toDF("i", "j", "v").where($"i" === "1");
 
-    val dotsCount = vectors.dot(
-      sqlContext, df, df, ("i", "j", "v"), ("i", "j", "v")
+    val dotsCount = matrix.dot(
+      sqlContext, df, df, ("i", "j", "v"), ("j", "i", "v")
     ).count;
     assert(dotsCount == 0);
   }
@@ -58,18 +58,18 @@ class VectorsSuite extends FunSuite with SharedSparkContext {
     );
     val rdd2 = sc.parallelize(
       Array(
-        ("1", "0", 3.0),
-        ("1", "1", 4.0)
+        ("0", "0", 3.0),
+        ("1", "0", 4.0)
       )
-    )
+    );
     val (df1, df2) = (rdd1.toDF("i", "j", "v"), rdd2.toDF("i", "j", "v"));
-    val dots = vectors.dot(
+    val dots = matrix.dot(
       sqlContext, df1, df2, ("i", "j", "v"), ("i", "j", "v")
     ).collect;
     assert(dots.size == 1);
     val dot = dots(0);
     assert(dot.getAs[String]("row") == "0");
-    assert(dot.getAs[String]("col") == "1");
+    assert(dot.getAs[String]("col") == "0");
     assert(dot.getAs[Double]("dot") == 11.0);
   }
 
@@ -85,10 +85,10 @@ class VectorsSuite extends FunSuite with SharedSparkContext {
     );
     val df = rdd.toDF("i", "j", "v");
     assertThrows[Exception] {
-      vectors.norm(-1, sqlContext, df, "i", "v")
+      matrix.norm(-1, sqlContext, df, "i", "v")
     }
     assertThrows[Exception] {
-      vectors.norm(0, sqlContext, df, "i", "v")
+      matrix.norm(0, sqlContext, df, "i", "v")
     }
   }
 
@@ -104,7 +104,7 @@ class VectorsSuite extends FunSuite with SharedSparkContext {
     );
     val df = rdd.toDF("i", "j", "v");
 
-    val norms = vectors.norm(1, sqlContext, df, "i", "v").collect;
+    val norms = matrix.norm(1, sqlContext, df, "i", "v").collect;
     assert(norms.size == 1);
     val norm = norms(0);
     assert(norm.getAs[Double]("norm") == 3.0);
@@ -122,7 +122,7 @@ class VectorsSuite extends FunSuite with SharedSparkContext {
     );
     val df = rdd.toDF("i", "j", "v");
 
-    val norms = vectors.norm(2, sqlContext, df, "i", "v").collect;
+    val norms = matrix.norm(2, sqlContext, df, "i", "v").collect;
     assert(norms.size == 1);
     val norm = norms(0);
     assert(norm.getAs[Double]("norm") == math.sqrt(5.0));

@@ -2,34 +2,34 @@ package net.sunshire.numspark.dataframes.linalg;
 
 import org.apache.spark.sql.{Column, DataFrame, SQLContext};
 
-object vectors {
+object matrix {
   def dot(
     sqlContext: SQLContext,
-    vs1: DataFrame,
-    vs2: DataFrame,
-    vs1ijk: Tuple3[String, String, String],
-    vs2ijk: Tuple3[String, String, String]
+    m1: DataFrame,
+    m2: DataFrame,
+    m1ijk: Tuple3[String, String, String],
+    m2ijk: Tuple3[String, String, String]
   ): DataFrame = {
     import sqlContext.implicits._;
     import org.apache.spark.sql.functions._;
 
-    val asVs1 = vs1.as("vs1");
-    val asVs2 = vs2.as("vs2");
-    val joinCondition = col("vs1." + vs1ijk._2) === col("vs2." + vs2ijk._2);
-    val newRowIndex = col("vs1." + vs1ijk._1).as("row");
-    val newColIndex = col("vs2." + vs2ijk._1).as("col");
-    val vs1k = col("vs1." + vs1ijk._3);
-    val vs2k = col("vs2." + vs2ijk._3);
-    val dots = asVs1.join(asVs2, joinCondition)
+    val asM1 = m1.as("m1");
+    val asM2 = m2.as("m2");
+    val joinCondition = col("m1." + m1ijk._2) === col("m2." + m2ijk._1);
+    val newRowIndex = col("m1." + m1ijk._1).as("row");
+    val newColIndex = col("m2." + m2ijk._2).as("col");
+    val m1k = col("m1." + m1ijk._3);
+    val m2k = col("m2." + m2ijk._3);
+    val dots = asM1.join(asM2, joinCondition)
       .groupBy(newRowIndex, newColIndex)
-      .agg(sum(vs1k * vs2k).as("dot"));
+      .agg(sum(m1k * m2k).as("dot"));
     return dots;
   }
 
   def norm(
     n: Int,
     sqlContext: SQLContext,
-    vs: DataFrame,
+    m: DataFrame,
     by: String,
     value: String
   ): DataFrame = {
@@ -44,7 +44,7 @@ object vectors {
     val normFormula =
       if(n > 1) pow(sum(normProduct), 1.0 / n)
       else abs(sum(normProduct));
-    val norms = vs.groupBy(col(by)).agg(normFormula.as("norm"));
+    val norms = m.groupBy(col(by)).agg(normFormula.as("norm"));
     return norms;
   }
 }
