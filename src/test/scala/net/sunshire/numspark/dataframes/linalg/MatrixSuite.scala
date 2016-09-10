@@ -96,21 +96,20 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
     val (df1, df2) = (rdd1.toDF("i", "j", "v"), rdd2.toDF("i", "j", "v"));
     val dots = matrix.dot(
       sqlContext, df1, df2, ("i", "j", "v"), ("i", "j", "v")
-    );
-    assert(dots.count == 4);
-    val collected = dots.orderBy($"row", $"col").collect;
-    assert(collected(0).getAs[String]("row") == "0");
-    assert(collected(0).getAs[String]("col") == "0");
-    assert(collected(0).getAs[Double]("dot") == 19.0);
-    assert(collected(1).getAs[String]("row") == "0");
-    assert(collected(1).getAs[String]("col") == "1");
-    assert(collected(1).getAs[Double]("dot") == 22.0);
-    assert(collected(2).getAs[String]("row") == "1");
-    assert(collected(2).getAs[String]("col") == "0");
-    assert(collected(2).getAs[Double]("dot") == 43.0);
-    assert(collected(3).getAs[String]("row") == "1");
-    assert(collected(3).getAs[String]("col") == "1");
-    assert(collected(3).getAs[Double]("dot") == 50.0);
+    ).orderBy($"row", $"col").collect;
+    assert(dots.size == 4);
+    assert(dots(0).getAs[String]("row") == "0");
+    assert(dots(0).getAs[String]("col") == "0");
+    assert(dots(0).getAs[Double]("dot") == 19.0);
+    assert(dots(1).getAs[String]("row") == "0");
+    assert(dots(1).getAs[String]("col") == "1");
+    assert(dots(1).getAs[Double]("dot") == 22.0);
+    assert(dots(2).getAs[String]("row") == "1");
+    assert(dots(2).getAs[String]("col") == "0");
+    assert(dots(2).getAs[Double]("dot") == 43.0);
+    assert(dots(3).getAs[String]("row") == "1");
+    assert(dots(3).getAs[String]("col") == "1");
+    assert(dots(3).getAs[Double]("dot") == 50.0);
   }
 
   test("norm - invalid norm") {
