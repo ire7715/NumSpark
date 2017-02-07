@@ -4,12 +4,13 @@ import org.apache.spark.sql.{Column, DataFrame, SQLContext};
 
 object matrix {
   def dot(
-    sqlContext: SQLContext,
-    m1: DataFrame,
-    m2: DataFrame,
-    m1ijk: Tuple3[String, String, String],
-    m2ijk: Tuple3[String, String, String]
+    mat1: (DataFrame, (String, String, String)),
+    mat2: (DataFrame, (String, String, String))
   ): DataFrame = {
+    val (m1, m1ijk) = mat1;
+    val (m2, m2ijk) = mat2;
+
+    val sqlContext = m1.sqlContext;
     import sqlContext.implicits._;
     import org.apache.spark.sql.functions._;
 
@@ -28,13 +29,14 @@ object matrix {
 
   def norm(
     n: Int,
-    sqlContext: SQLContext,
     m: DataFrame,
     by: String,
     value: String
   ): DataFrame = {
     if(n < 1)
       throw new Exception(n + "-norm is not a valid expression");
+
+    val sqlContext = m.sqlContext;
     import sqlContext.implicits._;
     import org.apache.spark.sql.functions._;
 

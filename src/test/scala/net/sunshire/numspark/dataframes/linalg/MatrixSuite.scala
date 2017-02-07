@@ -19,9 +19,7 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
       )
     );
     val df = rdd.toDF("i", "j", "v");
-    val dots = matrix.dot(
-      sqlContext, df, df, ("i", "j", "v"), ("j", "i", "v")
-    ).collect;
+    val dots = matrix.dot((df, ("i", "j", "v")), (df, ("j", "i", "v"))).collect;
     val dot = dots(0);
     assert(dot.getAs[String]("row") == "0");
     assert(dot.getAs[String]("col") == "0");
@@ -40,9 +38,7 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
     );
     val df = rdd.toDF("i", "j", "v").where($"i" === "1");
 
-    val dotsCount = matrix.dot(
-      sqlContext, df, df, ("i", "j", "v"), ("j", "i", "v")
-    ).count;
+    val dotsCount = matrix.dot((df, ("i", "j", "v")), (df, ("j", "i", "v"))).count;
     assert(dotsCount == 0);
   }
 
@@ -52,8 +48,7 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
 
     val rdd1 = sc.parallelize(
       Array(
-        ("0", "0", 1.0),
-        ("0", "1", 2.0)
+        ("0", "0", 1.0), ("0", "1", 2.0)
       )
     );
     val rdd2 = sc.parallelize(
@@ -63,9 +58,7 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
       )
     );
     val (df1, df2) = (rdd1.toDF("i", "j", "v"), rdd2.toDF("i", "j", "v"));
-    val dots = matrix.dot(
-      sqlContext, df1, df2, ("i", "j", "v"), ("i", "j", "v")
-    ).collect;
+    val dots = matrix.dot((df1, ("i", "j", "v")), (df2, ("i", "j", "v"))).collect;
     assert(dots.size == 1);
     val dot = dots(0);
     assert(dot.getAs[String]("row") == "0");
@@ -79,24 +72,19 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
 
     val rdd1 = sc.parallelize(
       Array(
-        ("0", "0", 1.0),
-        ("0", "1", 2.0),
-        ("1", "0", 3.0),
-        ("1", "1", 4.0)
+        ("0", "0", 1.0), ("0", "1", 2.0),
+        ("1", "0", 3.0), ("1", "1", 4.0)
       )
     );
     val rdd2 = sc.parallelize(
       Array(
-        ("0", "0", 5.0),
-        ("0", "1", 6.0),
-        ("1", "0", 7.0),
-        ("1", "1", 8.0)
+        ("0", "0", 5.0), ("0", "1", 6.0),
+        ("1", "0", 7.0), ("1", "1", 8.0)
       )
     );
     val (df1, df2) = (rdd1.toDF("i", "j", "v"), rdd2.toDF("i", "j", "v"));
-    val dots = matrix.dot(
-      sqlContext, df1, df2, ("i", "j", "v"), ("i", "j", "v")
-    ).orderBy($"row", $"col").collect;
+    val dots = matrix.dot((df1, ("i", "j", "v")), (df2, ("i", "j", "v")))
+      .orderBy($"row", $"col").collect;
     assert(dots.size == 4);
     assert(dots(0).getAs[String]("row") == "0");
     assert(dots(0).getAs[String]("col") == "0");
@@ -118,16 +106,15 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
 
     val rdd = sc.parallelize(
       Array(
-        ("0", "0", 1.0),
-        ("0", "1", 2.0)
+        ("0", "0", 1.0), ("0", "1", 2.0)
       )
     );
     val df = rdd.toDF("i", "j", "v");
     assertThrows[Exception] {
-      matrix.norm(-1, sqlContext, df, "i", "v")
+      matrix.norm(-1, df, "i", "v")
     }
     assertThrows[Exception] {
-      matrix.norm(0, sqlContext, df, "i", "v")
+      matrix.norm(0, df, "i", "v")
     }
   }
 
@@ -137,13 +124,12 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
 
     val rdd = sc.parallelize(
       Array(
-        ("0", "0", 1.0),
-        ("0", "1", 2.0)
+        ("0", "0", 1.0), ("0", "1", 2.0)
       )
     );
     val df = rdd.toDF("i", "j", "v");
 
-    val norms = matrix.norm(1, sqlContext, df, "i", "v").collect;
+    val norms = matrix.norm(1, df, "i", "v").collect;
     assert(norms.size == 1);
     val norm = norms(0);
     assert(norm.getAs[Double]("norm") == 3.0);
@@ -155,13 +141,12 @@ class MatrixSuite extends FunSuite with SharedSparkContext {
 
     val rdd = sc.parallelize(
       Array(
-        ("0", "0", 1.0),
-        ("0", "1", 2.0)
+        ("0", "0", 1.0), ("0", "1", 2.0)
       )
     );
     val df = rdd.toDF("i", "j", "v");
 
-    val norms = matrix.norm(2, sqlContext, df, "i", "v").collect;
+    val norms = matrix.norm(2, df, "i", "v").collect;
     assert(norms.size == 1);
     val norm = norms(0);
     assert(norm.getAs[Double]("norm") == math.sqrt(5.0));
