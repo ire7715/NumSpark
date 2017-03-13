@@ -5,5 +5,10 @@ lazy val root = (project in file(".")).settings(
   sparkVersion := "1.6.1",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.0",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.0" % "test",
-  sparkComponents += "sql"
+  sparkComponents += "sql",
+
+  libraryDependencies += "com.holdenkarau" %% "spark-testing-base" % "1.6.2_0.6.0" % "test",
+
+  parallelExecution in Test := false,
+  fork in Test := true
 )

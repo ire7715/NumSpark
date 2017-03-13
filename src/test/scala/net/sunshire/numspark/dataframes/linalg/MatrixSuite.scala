@@ -1,7 +1,7 @@
 package net.sunshire.numspark.dataframes.linalg;
 
+import com.holdenkarau.spark.testing.SharedSparkContext;
 import org.apache.spark.rdd.RDD;
-import org.apache.spark.SharedSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.scalatest.FunSuite;
 import scala.math;
