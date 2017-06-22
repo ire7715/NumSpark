@@ -10,10 +10,12 @@ import org.scalatest.{BeforeAndAfter, FunSuite};
 
 class FieldRDDOperatorSuite
     extends FunSuite with SharedSparkContext with BeforeAndAfter {
-  val data = Array(2, 3);
+  val data = Array(1, 2, 3);
   val dataSchema = StructType(Array(
     StructField("valueA", IntegerType, false),
-    StructField("valueB", IntegerType, false)
+    StructField("valueB", IntegerType, false),
+    StructField("valueC", IntegerType, false),
+    StructField("valueD", IntegerType, false)
   ));
   var dataRDD: RDD[Row] = null;
 
@@ -21,7 +23,8 @@ class FieldRDDOperatorSuite
     val sqlContext = new SQLContext(sc);
     import sqlContext.implicits._;
     dataRDD = sqlContext.createDataFrame(
-      sc.parallelize(data.map(v => Row(v, v * 5))), dataSchema).rdd;
+      sc.parallelize(data.map(v =>
+        Row(v, v * 5, v * 7, v * 11))), dataSchema).rdd;
   }
 
   test("implicit type casting(RDD -> FieldRDDOperator)") {
@@ -37,9 +40,11 @@ class FieldRDDOperatorSuite
     val expectedSchema = StructType(Array(
       StructField("valueA", IntegerType, false),
       StructField("valueB", IntegerType, false),
-      StructField("valueC", IntegerType, false)
+      StructField("valueC", IntegerType, false),
+      StructField("valueD", IntegerType, false),
+      StructField("valueZ", IntegerType, false)
     ));
-    val expectedArray = data.map(v => Row(v, v * 5, v * 7));
+    val expectedArray = data.map(v => Row(v, v * 5, v * 101));
 
     val newFieldArray = FieldRDDOperator.newField(dataRDD) { sourceRDD =>
       val sc = sourceRDD.sparkContext;
@@ -47,12 +52,12 @@ class FieldRDDOperatorSuite
       import sqlContext.implicits._;
       val newFieldSchema = StructType(Array(
         StructField("valueA", IntegerType, false),
-        StructField("valueC", IntegerType, false)
+        StructField("valueZ", IntegerType, false)
       ));
-      val newFieldRDD = sourceRDD.map(_ match {
-        case Row(valueA: Integer, valueB: Integer) =>
-          Row(valueA, valueA * 7)
-      });
+      val newFieldRDD = sourceRDD.map { row =>
+        val valueA = row.getAs[Integer]("valueA");
+        Row(valueA, valueA * 101)
+      };
       sqlContext.createDataFrame(newFieldRDD, newFieldSchema).rdd;
     }.collect.sortBy(_.getAs[Integer]("valueA"));
 
@@ -61,7 +66,7 @@ class FieldRDDOperatorSuite
     for(pair <- expectedArray.zip(newFieldArray)) {
       assert(pair._1.getAs[Integer](0) == pair._2.getAs[Integer]("valueA"));
       assert(pair._1.getAs[Integer](1) == pair._2.getAs[Integer]("valueB"));
-      assert(pair._1.getAs[Integer](2) == pair._2.getAs[Integer]("valueC"));
+      assert(pair._1.getAs[Integer](2) == pair._2.getAs[Integer]("valueZ"));
     }
   }
 
@@ -69,9 +74,11 @@ class FieldRDDOperatorSuite
     val expectedSchema = StructType(Array(
       StructField("valueA", IntegerType, false),
       StructField("valueB", IntegerType, false),
-      StructField("valueC", IntegerType, false)
+      StructField("valueC", IntegerType, false),
+      StructField("valueD", IntegerType, false),
+      StructField("valueZ", IntegerType, false)
     ));
-    val expectedArray = data.map(v => Row(v, v * 5, v * 7));
+    val expectedArray = data.map(v => Row(v, v * 5, v * 101));
 
     val newFieldArray = dataRDD.newField { sourceRDD =>
       val sc = sourceRDD.sparkContext;
@@ -79,12 +86,12 @@ class FieldRDDOperatorSuite
       import sqlContext.implicits._;
       val newFieldSchema = StructType(Array(
         StructField("valueA", IntegerType, false),
-        StructField("valueC", IntegerType, false)
+        StructField("valueZ", IntegerType, false)
       ));
-      val newFieldRDD = sourceRDD.map(_ match {
-        case Row(valueA: Integer, valueB: Integer) =>
-          Row(valueA, valueA * 7)
-      });
+      val newFieldRDD = sourceRDD.map { row =>
+        val valueA = row.getAs[Integer]("valueA");
+        Row(valueA, valueA * 101)
+      };
       sqlContext.createDataFrame(newFieldRDD, newFieldSchema).rdd;
     }.collect.sortBy(_.getAs[Integer]("valueA"));
 
