@@ -8,9 +8,9 @@ object FieldRDDOperator {
   def newField(sourceRDD: RDD[Row]) (map: RDD[Row] => RDD[Row]): RDD[Row] = {
     val sc = sourceRDD.sparkContext;
     val sqlContext = SQLContext.getOrCreate(sc)
-    val sourceSchema = sourceRDD.take(1)(0).schema;
+    val sourceSchema = sourceRDD.first.schema;
     val newFieldRDD = map(sourceRDD);
-    val newFieldSchema = newFieldRDD.take(1)(0).schema;
+    val newFieldSchema = newFieldRDD.first.schema;
     val Array(keySchema, fieldSchema) = newFieldSchema.fields;
     val keyName = keySchema.name;
     val sourceDataframe = sqlContext.createDataFrame(sourceRDD, sourceSchema);
