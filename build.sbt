@@ -1,6 +1,6 @@
 lazy val root = (project in file(".")).settings(
   name := "NumSpark",
-  version := "0.0.1",
+  version := "0.0.2",
   scalaVersion := "2.10.4",
   sparkVersion := "1.6.3",
   sparkComponents += "sql",
