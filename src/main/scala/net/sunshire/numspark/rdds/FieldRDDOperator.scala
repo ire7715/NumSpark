@@ -1,5 +1,6 @@
 package net.sunshire.numspark.rdds;
 
+import net.sunshire.numspark.rdds.Conversions._;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.SparkContext;
 import org.apache.spark.sql.{Row, SQLContext};
@@ -13,16 +14,9 @@ object FieldRDDOperator {
     * @return RDD[Row]; an RDD that append the mapped column to sourceRDD.
     */
   def newField(sourceRDD: RDD[Row]) (map: RDD[Row] => RDD[Row]): RDD[Row] = {
-    val sc = sourceRDD.sparkContext;
-    val sqlContext = SQLContext.getOrCreate(sc)
-    val sourceSchema = sourceRDD.first.schema;
     val newFieldRDD = map(sourceRDD);
-    val newFieldSchema = newFieldRDD.first.schema;
-    val Array(keySchema, fieldSchema) = newFieldSchema.fields;
-    val keyName = keySchema.name;
-    val sourceDataframe = sqlContext.createDataFrame(sourceRDD, sourceSchema);
-    val newFieldDataframe = sqlContext.createDataFrame(newFieldRDD, newFieldSchema);
-    return sourceDataframe.join(newFieldDataframe, keyName).rdd;
+    val Array(keySchema, _) = newFieldRDD.first.schema.fields;
+    return sourceRDD.join(newFieldRDD, keySchema.name).rdd;
   }
 
   /**
@@ -43,23 +37,13 @@ object FieldRDDOperator {
       inputParams: Array[String] = Array[String](),
       preservedParams: Array[String] = Array[String]())
       (reduce: RDD[Row] => RDD[Row]): RDD[Row] = {
-    val sc = sourceRDD.sparkContext;
-    val sqlContext = SQLContext.getOrCreate(sc);
-    val sourceSchema = sourceRDD.first.schema;
-    val sourceDataframe = sqlContext.createDataFrame(sourceRDD, sourceSchema);
     val inputRDD =
       if (inputParams.length == 0) sourceRDD
-      else sourceDataframe.select(key, inputParams: _*).rdd;
+      else sourceRDD.select(key, inputParams: _*).rdd;
     val reducedRDD = reduce(inputRDD);
-    val reducedDataframe = sqlContext.createDataFrame(
-      reducedRDD, reducedRDD.first.schema);
 
-
-    if (preservedParams.length == 0)
-      return reducedDataframe.rdd;
-    else
-      return reducedDataframe.join(
-        sourceDataframe.select(key, preservedParams: _*), key).rdd;
+    return if (preservedParams.length == 0) reducedRDD;
+      else return reducedRDD.join(sourceRDD.select(key, preservedParams: _*), key).rdd;
   }
 
   /**
@@ -81,7 +65,6 @@ class FieldRDDOperator(sourceRDD: RDD[Row]) {
     * @return RDD[Row]; an RDD that append the mapped column to sourceRDD.
     */
   def newField(map: RDD[Row] => RDD[Row]) = FieldRDDOperator.newField(sourceRDD) (map);
-
 
   /**
     * Perform the given reduction algorithm with given the input columns. It appends preserved columns after the reduction is done.
