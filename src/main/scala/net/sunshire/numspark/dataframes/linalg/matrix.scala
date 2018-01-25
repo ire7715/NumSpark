@@ -3,6 +3,13 @@ package net.sunshire.numspark.dataframes.linalg;
 import org.apache.spark.sql.{Column, DataFrame, SQLContext};
 
 object matrix {
+  /**
+    * Calculate the dot product of two matrices.
+    *
+    * @param mat1: Tuple2[DataFrame, Tuple3[String, String, String]]; The left matrix. The Tuple3 represents the row, column and value of the matrix.
+    * @param mat2: Tuple2[DataFrame, Tuple3[String, String, String]]; The right matrix. The Tuple3 represents the row, column and value of the matrix.
+    * @return DataFrame; With the schema ("row", "col", "dot")
+    */
   def dot(
     mat1: (DataFrame, (String, String, String)),
     mat2: (DataFrame, (String, String, String))
@@ -27,6 +34,15 @@ object matrix {
     return dots;
   }
 
+  /**
+    * Calculate the n-norm of a matrix.
+    *
+    * @param n: Int; n for n-norm.
+    * @param m: DataFrame; The dataframe that is being calculated.
+    * @param by: String; norm is grouped by which column name.
+    * @param value: String; The column name that calculates norm.
+    * @return DataFrame; A dataframe that having "$by" and "norm" columns.
+    */
   def norm(
     n: Int,
     m: DataFrame,
