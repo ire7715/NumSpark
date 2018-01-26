@@ -56,7 +56,7 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
   }
 }
 
-private[ml] class IsolationTree(data: DataFrame, maxDepth: Int) {
+class IsolationTree(data: DataFrame, maxDepth: Int) {
   private lazy val rootOption = grow(data, 0)
 
   def fit {
