@@ -56,21 +56,28 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
   }
 }
 
-class IsolationTree(data: DataFrame, maxDepth: Int) {
-  private lazy val rootOption = grow(data, 0)
-
-  def fit {
-    rootOption
-  }
-
-  def transform(testset: DataFrame, topK: Int): Array[Row] = {
+class IsolationTreeModel(rootOption: Option[IsolationTreeNode]) {
+  def transform(testset: DataFrame): DataFrame = {
+    import org.apache.spark.sql.functions
     val sqlContext = testset.sqlContext
     val rootOptionBr = sqlContext.sparkContext.broadcast(rootOption)
-    testset.rdd
-    .map(row => (IsolationTreeNode.pathLength(row, rootOptionBr.value), row))
-    .top(topK)(Ordering[Int].on(_._1))
-    .map(_._2)
+    val pathLengthUDF = sqlContext.udf.register(
+      "pathLength",
+      IsolationTreeNode.pathLength(_: Row, rootOptionBr.value, 0))
+    val allColumns = testset.columns.map(testset(_))
+    val pathLengthColumn = pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength")
+    val withPathLength = allColumns :+ pathLengthColumn
+    testset.select(withPathLength: _*).orderBy(pathLengthColumn.asc)
   }
+
+  def printModel {
+    // to-do
+    println("To be implemented.")
+  }
+}
+
+class IsolationTree(data: DataFrame, maxDepth: Int) {
+  def fit = new IsolationTreeModel(grow(data, 0))
 
   private def randomChoice[T](seq: Seq[T]): Option[T] = {
     if (seq.isEmpty) return None
