@@ -56,7 +56,42 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
   }
 }
 
+class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
+  private val treeCount = trees.length
+
+  def transform(testset: DataFrame): DataFrame = {
+    import org.apache.spark.sql.functions
+    val sqlContext = testset.sqlContext
+
+    val allColumns = testset.columns.map(testset(_))
+    val pathLengthColumns = for (i <- 0 until treeCount) yield {
+      val rootOptionBr = sqlContext.sparkContext.broadcast(trees(i).modelOption)
+      val pathLengthUDF = sqlContext.udf.register("pathLength" + i,
+        IsolationTreeNode.pathLength(_: Row, rootOptionBr.value, 0))
+      pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength" + i)
+    }
+    val pathLengthsAvg = (pathLengthColumns.reduce(_ + _) / lit(treeCount)).as("pathLengthAverage")
+    testset.select((allColumns ++ pathLengthColumns): _*)
+    .select((allColumns :+ pathLengthsAvg): _*)
+    .orderBy(pathLengthsAvg.desc)
+  }
+
+  def printModel {
+    // to-do
+    println("To be implemented.")
+  }
+}
+
+class IsolationForest(data: DataFrame, treeCount: Int, maxDepth: Int) {
+  def fit = new IsolationForestModel(
+    for (i <- 1 to treeCount)
+      yield new IsolationTree(data.sample(false, 1.0 / treeCount), maxDepth).fit
+  )
+}
+
 class IsolationTreeModel(rootOption: Option[IsolationTreeNode]) {
+  private[ml] val modelOption = rootOption
+
   def transform(testset: DataFrame): DataFrame = {
     import org.apache.spark.sql.functions
     val sqlContext = testset.sqlContext
@@ -67,7 +102,7 @@ class IsolationTreeModel(rootOption: Option[IsolationTreeNode]) {
     val allColumns = testset.columns.map(testset(_))
     val pathLengthColumn = pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength")
     val withPathLength = allColumns :+ pathLengthColumn
-    testset.select(withPathLength: _*).orderBy(pathLengthColumn.asc)
+    testset.select(withPathLength: _*).orderBy(pathLengthColumn.desc)
   }
 
   def printModel {
