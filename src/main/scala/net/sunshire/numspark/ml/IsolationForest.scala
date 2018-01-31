@@ -7,6 +7,14 @@ import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 import org.apache.spark.sql.types._
 import scala.util.Random
 
+/**
+  * Represents a tree node.
+  *
+  * @param column: StructField; colmun information.
+  * @param value: Any; the divide value of this node, left subtree are all elements <= $value. Using Any to match Row.getAs
+  * @param left: Option[IsolationTreeNode]; left subtree, could be None. Represents elements <= $value.
+  * @param right: Option[IsolationTreeNode]; right subtree, could be None. Represents elements > $value.
+  */
 private[ml] case class IsolationTreeNode(
     column: StructField,
     value: Any,
@@ -14,6 +22,14 @@ private[ml] case class IsolationTreeNode(
     right: Option[IsolationTreeNode]) extends java.io.Serializable
 
 private[ml] object IsolationTreeNode extends java.io.Serializable {
+  /**
+    * Recusive function to compute the path length of the element in the tree.
+    *
+    * @param row: Row; the row to compute the path length.
+    * @param rootOption: Option[IsolationTree]; the tree to traverse.
+    * @param depth: Int; represents the current depth, defaults 0. This parameter is used for the internal call only.
+    * @return Int
+    */
   def pathLength(row: Row, rootOption: Option[IsolationTreeNode], depth: Int = 0): Int = {
     if (rootOption.isEmpty) depth
     else {
@@ -56,9 +72,20 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
   }
 }
 
+/**
+  * The trained isolation forest model.
+  *
+  * @param trees: Seq[IsolationTreeModel]; trees to represents a forest.
+  */
 class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
   private val treeCount = trees.length
 
+  /**
+    * The prediction function.
+    *
+    * @param testset: DataFrame
+    * @return DataFrame: same as the $testset, with the new column "pathLengthAverage". And ordered by it in descending.
+    */
   def transform(testset: DataFrame): DataFrame = {
     import org.apache.spark.sql.functions
     val sqlContext = testset.sqlContext
@@ -82,16 +109,39 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
   }
 }
 
+/**
+  * The entry of isolation forest.
+  *
+  * @param data: DataFrame; the input data.
+  * @param treeCount: Int; the number of trees. Data will be divided evenly to each tree and be trained.
+  * @param maxDepth: the max depth of the constructed trees.
+  */
 class IsolationForest(data: DataFrame, treeCount: Int, maxDepth: Int) {
+  /**
+    * Train the model.
+    *
+    * @return IsolationForestModel
+    */
   def fit = new IsolationForestModel(
     for (i <- 1 to treeCount)
       yield new IsolationTree(data.sample(false, 1.0 / treeCount), maxDepth).fit
   )
 }
 
+/**
+  * The trained isolation tree model.
+  *
+  * @param rootOption: Option[IsolationTreeNode]; the tree structure
+  */
 class IsolationTreeModel(rootOption: Option[IsolationTreeNode]) {
   private[ml] val modelOption = rootOption
 
+  /**
+    * The predict function.
+    *
+    * @param testset: DataFrame; the data to be predicted.
+    * @return DataFrame; the testset with new column named "pathLenth". Ordered by it in descending.
+    */
   def transform(testset: DataFrame): DataFrame = {
     import org.apache.spark.sql.functions
     val sqlContext = testset.sqlContext
@@ -111,14 +161,35 @@ class IsolationTreeModel(rootOption: Option[IsolationTreeNode]) {
   }
 }
 
+/**
+  * The entry of the tree.
+  *
+  * @param data: DataFrame; the input data.
+  * @param maxDepth: Int; the max depth of the tree to contstruct.
+  */
 class IsolationTree(data: DataFrame, maxDepth: Int) {
-  def fit = new IsolationTreeModel(grow(data, 0))
+  def fit = new IsolationTreeModel(grow(data))
 
+  /**
+    * Choose from a Seq randomly.
+    *
+    * @param seq: Seq[T]; the sequence to be choose.
+    * @return Option[T]; the chosen element, could be None when the sequence has no element.
+    */
   private def randomChoice[T](seq: Seq[T]): Option[T] = {
     if (seq.isEmpty) return None
     else Option(seq(Random.nextInt(seq.length)))
   }
 
+  /**
+    * Choose the pivot value to divide the DataFrame into two.
+    *
+    * @param data: DataFrame; the data to be divided.
+    * @param field: StructField; the column applied to divide.
+    * @param min: Any; the lower bound (inclusive).
+    * @param max: Any; the upper bound (exclusive).
+    * @return Tuple3[Any, DataFrame, DataFrame]; the pivot value and the divided two DataFrames.
+    */
   private def randomPivot(
       data: DataFrame, field: StructField, min: Any, max: Any
   ): (Any, DataFrame, DataFrame) = {
@@ -159,7 +230,14 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
     (pivot, data.filter(column <= pivot), data.filter(column > pivot))
   }
 
-  private def grow(data: DataFrame, depth: Int): Option[IsolationTreeNode] = {
+  /**
+    * Recusive function to grow the tree.
+    *
+    * @param data: DataFrame; the input data.
+    * @param depth: Int; the current depth of the tree, defaults 0. This parameter is used for internal call only
+    * @return Option[IsolationTreeNode]
+    */
+  private def grow(data: DataFrame, depth: Int = 0): Option[IsolationTreeNode] = {
     if (depth >= maxDepth) return None
     val columns = columnAndBoundary(data).filter{case (column, min, max) => min != max}
     val choosedColumn = randomChoice(columns)
@@ -175,7 +253,13 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
     ))
   }
 
-  def columnAndBoundary(data: DataFrame): Seq[(StructField, Any, Any)] = {
+  /**
+    * Compute each columnn's boundaries.
+    *
+    * @param data: DataFrame; the input data.
+    * @return Seq[Tuple3[StructField, Any, Any]]; a sequence of each column and its min/max value.
+    */
+  private def columnAndBoundary(data: DataFrame): Seq[(StructField, Any, Any)] = {
     val columns = data.schema.toList
     val minmaxColumns = columns.map{ _column =>
       import org.apache.spark.sql.functions._
