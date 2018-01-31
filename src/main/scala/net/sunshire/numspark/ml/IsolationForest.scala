@@ -5,6 +5,7 @@ import org.apache.spark.ml.feature.StringIndexer
 import org.apache.spark.ml.{Pipeline}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 import org.apache.spark.sql.types._
+import net.sunshire.numspark.utils.ExtendedRandom._
 import scala.util.Random
 
 /**
@@ -97,7 +98,9 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
         IsolationTreeNode.pathLength(_: Row, rootOptionBr.value, 0))
       pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength" + i)
     }
-    val pathLengthsAvg = (pathLengthColumns.reduce(_ + _) / lit(treeCount)).as("pathLengthAverage")
+    val pathLengthsAvg = (
+      pathLengthColumns.reduce(_ + _) / functions.lit(treeCount)
+    ).as("pathLengthAverage")
     testset.select((allColumns ++ pathLengthColumns): _*)
     .select((allColumns :+ pathLengthsAvg): _*)
     .orderBy(pathLengthsAvg.desc)
@@ -171,17 +174,6 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
   def fit = new IsolationTreeModel(grow(data))
 
   /**
-    * Choose from a Seq randomly.
-    *
-    * @param seq: Seq[T]; the sequence to be choose.
-    * @return Option[T]; the chosen element, could be None when the sequence has no element.
-    */
-  private def randomChoice[T](seq: Seq[T]): Option[T] = {
-    if (seq.isEmpty) return None
-    else Option(seq(Random.nextInt(seq.length)))
-  }
-
-  /**
     * Choose the pivot value to divide the DataFrame into two.
     *
     * @param data: DataFrame; the data to be divided.
@@ -190,7 +182,7 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
     * @param max: Any; the upper bound (exclusive).
     * @return Tuple3[Any, DataFrame, DataFrame]; the pivot value and the divided two DataFrames.
     */
-  private def randomPivot(
+  private[ml] def randomPivot(
       data: DataFrame, field: StructField, min: Any, max: Any
   ): (Any, DataFrame, DataFrame) = {
     val column = data.col(field.name)
@@ -240,7 +232,7 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
   private def grow(data: DataFrame, depth: Int = 0): Option[IsolationTreeNode] = {
     if (depth >= maxDepth) return None
     val columns = columnAndBoundary(data).filter{case (column, min, max) => min != max}
-    val choosedColumn = randomChoice(columns)
+    val choosedColumn = Random.choice(columns)
     if (choosedColumn.isEmpty) return None
     val (column, min, max) = choosedColumn.get
     val pivot = randomPivot(data, column, min, max)
@@ -259,7 +251,7 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
     * @param data: DataFrame; the input data.
     * @return Seq[Tuple3[StructField, Any, Any]]; a sequence of each column and its min/max value.
     */
-  private def columnAndBoundary(data: DataFrame): Seq[(StructField, Any, Any)] = {
+  private[ml] def columnAndBoundary(data: DataFrame): Seq[(StructField, Any, Any)] = {
     val columns = data.schema.toList
     val minmaxColumns = columns.map{ _column =>
       import org.apache.spark.sql.functions._
