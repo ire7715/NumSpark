@@ -24,6 +24,6 @@ class EntendedRandomSuite extends FunSuite {
   test("choice from empty set") {
     val sequence = Seq[Int]()
     val choiceOption = Random.choice(sequence)
-    assert(choice.isEmpty)
+    assert(choiceOption.isEmpty)
   }
 }

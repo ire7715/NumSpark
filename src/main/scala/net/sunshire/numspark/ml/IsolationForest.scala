@@ -164,87 +164,7 @@ class IsolationTreeModel(rootOption: Option[IsolationTreeNode]) {
   }
 }
 
-/**
-  * The entry of the tree.
-  *
-  * @param data: DataFrame; the input data.
-  * @param maxDepth: Int; the max depth of the tree to contstruct.
-  */
-class IsolationTree(data: DataFrame, maxDepth: Int) {
-  def fit = new IsolationTreeModel(grow(data))
-
-  /**
-    * Choose the pivot value to divide the DataFrame into two.
-    *
-    * @param data: DataFrame; the data to be divided.
-    * @param field: StructField; the column applied to divide.
-    * @param min: Any; the lower bound (inclusive).
-    * @param max: Any; the upper bound (exclusive).
-    * @return Tuple3[Any, DataFrame, DataFrame]; the pivot value and the divided two DataFrames.
-    */
-  private[ml] def randomPivot(
-      data: DataFrame, field: StructField, min: Any, max: Any
-  ): (Any, DataFrame, DataFrame) = {
-    val column = data.col(field.name)
-    val pivot: Any = field.dataType match {
-      case BooleanType =>
-        false
-      case ByteType =>
-        val maxByte = max.asInstanceOf[Byte]
-        val minByte = min.asInstanceOf[Byte]
-        (Random.nextInt(maxByte - minByte) + minByte).toByte
-      // case DateType =>
-      //   0 // to-do
-      // case DecimalType =>
-      //   0 // to-do
-      case DoubleType =>
-        val maxDouble = max.asInstanceOf[Double]
-        val minDouble = min.asInstanceOf[Double]
-        Random.nextDouble * (maxDouble - minDouble) + minDouble
-      case FloatType =>
-        val maxFloat = max.asInstanceOf[Float]
-        val minFloat = min.asInstanceOf[Float]
-        Random.nextFloat * (maxFloat - minFloat) + minFloat
-      case IntegerType =>
-        val maxInt = max.asInstanceOf[Int]
-        val minInt = min.asInstanceOf[Int]
-        Random.nextInt(maxInt - minInt) + minInt
-      case LongType =>
-        val maxLong = max.asInstanceOf[Long]
-        val minLong = min.asInstanceOf[Long]
-        Random.nextLong % (maxLong - minLong) + minLong
-      case ShortType =>
-        val maxShort = max.asInstanceOf[Short]
-        val minShort = min.asInstanceOf[Short]
-        (Random.nextInt(maxShort - minShort) + minShort).toShort
-      case _ => throw new Exception(field.name + " is not a numerical column.")
-    }
-    (pivot, data.filter(column <= pivot), data.filter(column > pivot))
-  }
-
-  /**
-    * Recusive function to grow the tree.
-    *
-    * @param data: DataFrame; the input data.
-    * @param depth: Int; the current depth of the tree, defaults 0. This parameter is used for internal call only
-    * @return Option[IsolationTreeNode]
-    */
-  private def grow(data: DataFrame, depth: Int = 0): Option[IsolationTreeNode] = {
-    if (depth >= maxDepth) return None
-    val columns = columnAndBoundary(data).filter{case (column, min, max) => min != max}
-    val choosedColumn = Random.choice(columns)
-    if (choosedColumn.isEmpty) return None
-    val (column, min, max) = choosedColumn.get
-    val pivot = randomPivot(data, column, min, max)
-    val filteredColumns = columns.map(field => data.col(field._1.name))
-    return Option(IsolationTreeNode(
-      column,
-      pivot._1,
-      grow(pivot._2.select(filteredColumns: _*), depth + 1),
-      grow(pivot._3.select(filteredColumns: _*), depth + 1)
-    ))
-  }
-
+object IsolationTree {
   /**
     * Compute each columnn's boundaries.
     *
@@ -300,5 +220,88 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
         case _ => throw new Exception(column.name + " is not a numerical column.")
       }
     })
+  }
+
+  /**
+    * Choose the pivot value to divide the DataFrame into two.
+    *
+    * @param data: DataFrame; the data to be divided.
+    * @param field: StructField; the column applied to divide.
+    * @param min: Any; the lower bound (inclusive).
+    * @param max: Any; the upper bound (exclusive).
+    * @return Tuple3[Any, DataFrame, DataFrame]; the pivot value and the divided two DataFrames.
+    */
+  private[ml] def randomPivot(
+      data: DataFrame, field: StructField, min: Any, max: Any
+  ): (Any, DataFrame, DataFrame) = {
+    val column = data.col(field.name)
+    val pivot: Any = field.dataType match {
+      case BooleanType =>
+        false
+      case ByteType =>
+        val maxByte = max.asInstanceOf[Byte]
+        val minByte = min.asInstanceOf[Byte]
+        (Random.nextInt(maxByte - minByte) + minByte).toByte
+      // case DateType =>
+      //   0 // to-do
+      // case DecimalType =>
+      //   0 // to-do
+      case DoubleType =>
+        val maxDouble = max.asInstanceOf[Double]
+        val minDouble = min.asInstanceOf[Double]
+        Random.nextDouble * (maxDouble - minDouble) + minDouble
+      case FloatType =>
+        val maxFloat = max.asInstanceOf[Float]
+        val minFloat = min.asInstanceOf[Float]
+        Random.nextFloat * (maxFloat - minFloat) + minFloat
+      case IntegerType =>
+        val maxInt = max.asInstanceOf[Int]
+        val minInt = min.asInstanceOf[Int]
+        Random.nextInt(maxInt - minInt) + minInt
+      case LongType =>
+        val maxLong = max.asInstanceOf[Long]
+        val minLong = min.asInstanceOf[Long]
+        Random.nextLong % (maxLong - minLong) + minLong
+      case ShortType =>
+        val maxShort = max.asInstanceOf[Short]
+        val minShort = min.asInstanceOf[Short]
+        (Random.nextInt(maxShort - minShort) + minShort).toShort
+      case _ => throw new Exception(field.name + " is not a numerical column.")
+    }
+    (pivot, data.filter(column <= pivot), data.filter(column > pivot))
+  }
+}
+
+/**
+  * The entry of the tree.
+  *
+  * @param data: DataFrame; the input data.
+  * @param maxDepth: Int; the max depth of the tree to contstruct.
+  */
+class IsolationTree(data: DataFrame, maxDepth: Int) {
+  def fit = new IsolationTreeModel(grow(data))
+
+  /**
+    * Recusive function to grow the tree.
+    *
+    * @param data: DataFrame; the input data.
+    * @param depth: Int; the current depth of the tree, defaults 0. This parameter is used for internal call only
+    * @return Option[IsolationTreeNode]
+    */
+  private def grow(data: DataFrame, depth: Int = 0): Option[IsolationTreeNode] = {
+    if (depth >= maxDepth) return None
+    val columns = IsolationTree.columnAndBoundary(data)
+    .filter{ case (column, min, max) => min != max }
+    val choosedColumn = Random.choice(columns)
+    if (choosedColumn.isEmpty) return None
+    val (column, min, max) = choosedColumn.get
+    val pivot = IsolationTree.randomPivot(data, column, min, max)
+    val filteredColumns = columns.map(field => data.col(field._1.name))
+    return Option(IsolationTreeNode(
+      column,
+      pivot._1,
+      grow(pivot._2.select(filteredColumns: _*), depth + 1),
+      grow(pivot._3.select(filteredColumns: _*), depth + 1)
+    ))
   }
 }
