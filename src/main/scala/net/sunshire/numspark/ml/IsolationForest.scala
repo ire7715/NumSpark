@@ -1,5 +1,6 @@
 package net.sunshire.numspark.ml
 
+import java.util.NoSuchElementException
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.feature.StringIndexer
 import org.apache.spark.ml.{Pipeline}
@@ -7,7 +8,7 @@ import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 import org.apache.spark.sql.types._
 import net.sunshire.numspark.utils.ExtendedRandom._
 import scala.math
-import scala.util.{NoSuchElementException, Random}
+import scala.util.Random
 
 /**
   * Represents a tree node.
@@ -16,6 +17,7 @@ import scala.util.{NoSuchElementException, Random}
   * @param value: Any; the divide value of this node, left subtree are all elements <= $value. Using Any to match Row.getAs
   * @param left: Option[IsolationTreeNode]; left subtree, could be None. Represents elements <= $value.
   * @param right: Option[IsolationTreeNode]; right subtree, could be None. Represents elements > $value.
+  * @param size: Long; the number of training instances contained in this subtree.
   */
 private[ml] case class IsolationTreeNode(
     column: StructField,
@@ -30,8 +32,8 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
     *
     * @param row: Row; the row to compute the path length.
     * @param rootOption: Option[IsolationTree]; the tree to traverse.
-    * @param depth: Int; represents the current depth, defaults 0. This parameter is used for the internal call only.
-    * @return Int
+    * @param depth: Double; represents the current depth, defaults 0. This parameter is used for the internal call only.
+    * @return Double; the estimated depth.
     */
   def pathLength(row: Row, rootOption: Option[IsolationTreeNode], depth: Double = 0.0): Double = {
     if (rootOption.isEmpty) throw new NoSuchElementException("A non-full binary tree has grown.")
@@ -151,9 +153,13 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
   *
   * @param data: DataFrame; the input data.
   * @param treeCount: Int; the number of trees. Data will be divided evenly to each tree and be trained.
-  * @param maxDepth: the max depth of the constructed trees.
+  * @param samplingSize: the sampling size for training.
   */
-class IsolationForest(data: DataFrame, treeCount: Int, maxDepth: Int) {
+class IsolationForest(data: DataFrame, treeCount: Int, samplingSize: Int) {
+  val size = data.count
+  val samplingFraction = samplingSize.toDouble / size
+  val maxDepth = math.ceil(math.log(samplingSize) / math.log(2)).toInt
+
   /**
     * Train the model.
     *
@@ -161,7 +167,7 @@ class IsolationForest(data: DataFrame, treeCount: Int, maxDepth: Int) {
     */
   def fit = new IsolationForestModel(
     for (i <- 1 to treeCount)
-      yield new IsolationTree(data.sample(false, 1.0 / treeCount), maxDepth).fit
+      yield new IsolationTree(data.sample(false, samplingFraction), maxDepth).fit
   )
 }
 
