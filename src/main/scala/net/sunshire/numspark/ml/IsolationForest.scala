@@ -6,7 +6,8 @@ import org.apache.spark.ml.{Pipeline}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
 import org.apache.spark.sql.types._
 import net.sunshire.numspark.utils.ExtendedRandom._
-import scala.util.Random
+import scala.math
+import scala.util.{NoSuchElementException, Random}
 
 /**
   * Represents a tree node.
@@ -20,7 +21,8 @@ private[ml] case class IsolationTreeNode(
     column: StructField,
     value: Any,
     left: Option[IsolationTreeNode],
-    right: Option[IsolationTreeNode]) extends java.io.Serializable
+    right: Option[IsolationTreeNode],
+    size: Long) extends java.io.Serializable
 
 private[ml] object IsolationTreeNode extends java.io.Serializable {
   /**
@@ -31,46 +33,76 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
     * @param depth: Int; represents the current depth, defaults 0. This parameter is used for the internal call only.
     * @return Int
     */
-  def pathLength(row: Row, rootOption: Option[IsolationTreeNode], depth: Int = 0): Int = {
-    if (rootOption.isEmpty) depth
+  def pathLength(row: Row, rootOption: Option[IsolationTreeNode], depth: Double = 0.0): Double = {
+    if (rootOption.isEmpty) throw new NoSuchElementException("A non-full binary tree has grown.")
     else {
       val root = rootOption.get
-      val column = root.column
-      column.dataType match {
-        case BooleanType =>
-          if (row.getAs[Boolean](column.name) == false) pathLength(row, root.left, depth + 1)
-          else pathLength(row, root.right, depth + 1)
-        case ByteType =>
-          if (row.getAs[Byte](column.name) <= root.value.asInstanceOf[Byte]){
-            pathLength(row, root.left, depth + 1)
-          } else pathLength(row, root.right, depth + 1)
-        // case DateType =>
-        // to-do
-        // case DecimalType =>
-        // to-do
-        case DoubleType =>
-          if (row.getAs[Double](column.name) <= root.value.asInstanceOf[Double]) {
-            pathLength(row, root.left, depth + 1)
-          } else pathLength(row, root.right, depth + 1)
-        case FloatType =>
-          if (row.getAs[Float](column.name) <= root.value.asInstanceOf[Float]) {
-            pathLength(row, root.left, depth + 1)
-          } else pathLength(row, root.right, depth + 1)
-        case IntegerType =>
-          if (row.getAs[Int](column.name) <= root.value.asInstanceOf[Int]) {
-            pathLength(row, root.left, depth + 1)
-          } else pathLength(row, root.right, depth + 1)
-        case LongType =>
-          if (row.getAs[Long](column.name) <= root.value.asInstanceOf[Long]) {
-            pathLength(row, root.left, depth + 1)
-          } else pathLength(row, root.right, depth + 1)
-        case ShortType =>
-          if (row.getAs[Short](column.name) <= root.value.asInstanceOf[Short]) {
-            pathLength(row, root.left, depth + 1)
-          } else pathLength(row, root.right, depth + 1)
+      if (root.left.isEmpty && root.right.isEmpty) {
+        depth + IsolationTreeNode.adjustment(root.size)
+      } else {
+        val column = root.column
+        column.dataType match {
+          case BooleanType =>
+            if (row.getAs[Boolean](column.name) == false) pathLength(row, root.left, depth + 1)
+            else pathLength(row, root.right, depth + 1)
+          case ByteType =>
+            if (row.getAs[Byte](column.name) <= root.value.asInstanceOf[Byte]){
+              pathLength(row, root.left, depth + 1)
+            } else pathLength(row, root.right, depth + 1)
+          // case DateType =>
+          // to-do
+          // case DecimalType =>
+          // to-do
+          case DoubleType =>
+            if (row.getAs[Double](column.name) <= root.value.asInstanceOf[Double]) {
+              pathLength(row, root.left, depth + 1)
+            } else pathLength(row, root.right, depth + 1)
+          case FloatType =>
+            if (row.getAs[Float](column.name) <= root.value.asInstanceOf[Float]) {
+              pathLength(row, root.left, depth + 1)
+            } else pathLength(row, root.right, depth + 1)
+          case IntegerType =>
+            if (row.getAs[Int](column.name) <= root.value.asInstanceOf[Int]) {
+              pathLength(row, root.left, depth + 1)
+            } else pathLength(row, root.right, depth + 1)
+          case LongType =>
+            if (row.getAs[Long](column.name) <= root.value.asInstanceOf[Long]) {
+              pathLength(row, root.left, depth + 1)
+            } else pathLength(row, root.right, depth + 1)
+          case ShortType =>
+            if (row.getAs[Short](column.name) <= root.value.asInstanceOf[Short]) {
+              pathLength(row, root.left, depth + 1)
+            } else pathLength(row, root.right, depth + 1)
+        }
       }
     }
   }
+
+  /**
+    * The adjustment function for estimating the path length of an external node.
+    *
+    * @param treeSize: the sample size of this subtree.
+    * @return 2 * harmonic(treeSize - 1) - 2 * (treeSize - 1) / treeSize
+    */
+  def adjustment(treeSize: Long): Double = 2 * harmonic(treeSize - 1) - 2 * (treeSize - 1) / treeSize
+
+  /**
+    * The harmonic number, ln(i) + Euler's constant
+    *
+    * @param i
+    * @return ln(i) + 0.5772156649(Euler's constant)
+    */
+  def harmonic(i: Long): Double = math.log(i) + 0.5772156649
+
+  /**
+    * The anomaly score.
+    *
+    * @param avgPathLength: the E(h(x)) in the paper, represents the mean path length of a instance to a forest
+    * @param treeSize: the subsampling size of the training set.
+    * @return the anomaly score
+    */
+  def anomalyScore(avgPathLength: Double, treeSize: Long): Double = math.pow(2,
+    -avgPathLength / adjustment(treeSize))
 }
 
 /**
@@ -85,7 +117,7 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
     * The prediction function.
     *
     * @param testset: DataFrame
-    * @return DataFrame: same as the $testset, with the new column "pathLengthAverage". And ordered by it in descending.
+    * @return DataFrame: same as the $testset, with the new column "anomalyScore". And ordered by it in descending.
     */
   def transform(testset: DataFrame): DataFrame = {
     import org.apache.spark.sql.functions
@@ -95,15 +127,17 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
     val pathLengthColumns = for (i <- 0 until treeCount) yield {
       val rootOptionBr = sqlContext.sparkContext.broadcast(trees(i).modelOption)
       val pathLengthUDF = sqlContext.udf.register("pathLength" + i,
-        IsolationTreeNode.pathLength(_: Row, rootOptionBr.value, 0))
+        IsolationTreeNode.pathLength(_: Row, rootOptionBr.value))
       pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength" + i)
     }
-    val pathLengthsAvg = (
-      pathLengthColumns.reduce(_ + _) / functions.lit(treeCount)
-    ).as("pathLengthAverage")
+    val anomalyScoreUDF = sqlContext.udf.register("anomalyScore",
+      IsolationTreeNode.anomalyScore(_: Double, trees(0).modelOption.get.size))
+    val anomalyScore = (
+      anomalyScoreUDF(pathLengthColumns.reduce(_ + _) / functions.lit(treeCount))
+    ).as("anomalyScore")
     testset.select((allColumns ++ pathLengthColumns): _*)
-    .select((allColumns :+ pathLengthsAvg): _*)
-    .orderBy(pathLengthsAvg.desc)
+    .select((allColumns :+ anomalyScore): _*)
+    .orderBy(anomalyScore.desc)
   }
 
   def printModel {
@@ -301,7 +335,8 @@ class IsolationTree(data: DataFrame, maxDepth: Int) {
       column,
       pivot._1,
       grow(pivot._2.select(filteredColumns: _*), depth + 1),
-      grow(pivot._3.select(filteredColumns: _*), depth + 1)
+      grow(pivot._3.select(filteredColumns: _*), depth + 1),
+      data.count
     ))
   }
 }
