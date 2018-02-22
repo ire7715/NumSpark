@@ -11,6 +11,34 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
   var sqlContext: SQLContext = _
   var schema: StructType = _
   var data: DataFrame = _
+  val modelPath = "/tmp/model"
+  val normalSeq = Seq(
+    Row(0.0, 1),
+    Row(0.0, 2),
+    Row(0.0, 1),
+    Row(0.0, 2),
+    Row(0.0, 1),
+    Row(0.0, 2),
+    Row(0.0, 1),
+    Row(0.0, 2),
+    Row(1.0, 2),
+    Row(1.0, 1),
+    Row(1.0, 1),
+    Row(1.0, 2),
+    Row(1.0, 2),
+    Row(1.0, 1),
+    Row(1.0, 1),
+    Row(1.0, 2))
+  val abnormalSeq = Seq(
+    Row(1.0, 100),
+    Row(0.0, 200),
+    Row(0.0, -100),
+    Row(1.0, -200))
+  val anomalySchema = StructType(Seq(
+    StructField("double", DoubleType),
+    StructField("int", IntegerType)
+  ))
+
   before {
     sqlContext = new SQLContext(sc)
     schema = StructType(Seq(
@@ -26,6 +54,12 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       Row(false, 1.toByte, 1.0, (1.0).toFloat, 1, 1.toLong, 1.toShort),
       Row(true, 2.toByte, 2.0, (2.0).toFloat, 2, 2.toLong, 2.toShort)
     )), schema)
+  }
+
+  after {
+    import java.io._
+    val modelFilePointer = new File(modelPath)
+    modelFilePointer.delete
   }
 
   test("IsolationTree.columnAndBoundary") {
@@ -121,32 +155,6 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
   test("anomaly detection") {
     val iterationNumber = 10
     val expectedRate = 0.6
-    val normalSeq = Seq(
-      Row(0.0, 1),
-      Row(0.0, 2),
-      Row(0.0, 1),
-      Row(0.0, 2),
-      Row(0.0, 1),
-      Row(0.0, 2),
-      Row(0.0, 1),
-      Row(0.0, 2),
-      Row(1.0, 2),
-      Row(1.0, 1),
-      Row(1.0, 1),
-      Row(1.0, 2),
-      Row(1.0, 2),
-      Row(1.0, 1),
-      Row(1.0, 1),
-      Row(1.0, 2))
-    val abnormalSeq = Seq(
-      Row(1.0, 100),
-      Row(0.0, 200),
-      Row(0.0, -100),
-      Row(1.0, -200))
-    val anomalySchema = StructType(Seq(
-      StructField("double", DoubleType),
-      StructField("int", IntegerType)
-    ))
     val anomalyData = sqlContext.createDataFrame(
       sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
     var scoringBoard = Array.fill[Int](abnormalSeq.length)(0)
@@ -166,5 +174,25 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
         s" be detected only $score times," +
         s" ${(iterationNumber * expectedRate).toInt} times expected")
     }
+  }
+
+  test("write/read tree model") {
+    val anomalyData = sqlContext.createDataFrame(
+      sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
+    val tree = new IsolationTree(anomalyData, 2)
+    val model = tree.fit
+    model.write(modelPath)
+    val readModel = IsolationTree.readModel(modelPath)
+    val anomalies = readModel.transform(anomalyData)
+  }
+
+  test("write/read forest model") {
+    val anomalyData = sqlContext.createDataFrame(
+      sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
+    val forest = new IsolationForest(anomalyData, 5, 10)
+    val model = forest.fit
+    model.write(modelPath)
+    val readModel = IsolationForest.readModel(modelPath)
+    val anomalies = readModel.transform(anomalyData)
   }
 }

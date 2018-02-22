@@ -124,6 +124,7 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
   * @param trees: trees to represents a forest.
   */
 class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
+  private[ml] val treeModels = trees
   private[ml] val treeCount = trees.length
 
   /**
@@ -154,9 +155,37 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
     .orderBy(anomalyScore.desc)
   }
 
+  /**
+    * Write the forest to the file system.
+    *
+    * @param path: the path to save the model.
+    */
+  def write(path: String) {
+    import java.io._
+    val oos = new ObjectOutputStream(new FileOutputStream(path))
+    oos.writeObject(trees.map(_.model))
+    oos.close
+  }
+
   def printModel {
     // to-do
     println("To be implemented.")
+  }
+}
+
+object IsolationForest {
+  /**
+    * Read the model from file system.
+    *
+    * @param path: the path to the existent model file.
+    * @return the forest model
+    */
+  def readModel(path: String): IsolationForestModel = {
+    import java.io._
+    val ois = new ObjectInputStream(new FileInputStream(path))
+    val roots = ois.readObject.asInstanceOf[Seq[IsolationTreeNode]]
+    ois.close
+    new IsolationForestModel(roots.map(new IsolationTreeModel(_)))
   }
 }
 
@@ -215,6 +244,18 @@ class IsolationTreeModel(root: IsolationTreeNode) {
     val pathLengthColumn = pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength")
     val withPathLength = allColumns :+ pathLengthColumn
     testset.select(withPathLength: _*).orderBy(pathLengthColumn.desc)
+  }
+
+  /**
+    * Write the model to file system.
+    *
+    * @param path: the path for the model storage.
+    */
+  def write(path: String) {
+    import java.io._
+    val oos = new ObjectOutputStream(new FileOutputStream(path))
+    oos.writeObject(root)
+    oos.close
   }
 
   def printModel {
@@ -328,6 +369,20 @@ object IsolationTree {
       case _ => throw new Exception(field.name + " is not a numerical column.")
     }
     (pivot, data.filter(column <= pivot), data.filter(column > pivot))
+  }
+
+  /**
+    * Read the model from file system.
+    *
+    * @param path: the path to the existent model file.
+    * @return the tree model
+    */
+  def readModel(path: String): IsolationTreeModel = {
+    import java.io._
+    val ois = new ObjectInputStream(new FileInputStream(path))
+    val root = ois.readObject.asInstanceOf[IsolationTreeNode]
+    ois.close
+    new IsolationTreeModel(root)
   }
 }
 
