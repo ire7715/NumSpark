@@ -181,7 +181,7 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
 
   test("predict") {
     val iterationNumber = 10
-    val expectedRate = 0.8
+    val expectedRate = 0.6
     val anomalyData = sqlContext.createDataFrame(
       sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
     var scoringBoard = Array.fill[Int](abnormalSeq.length)(0)
