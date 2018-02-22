@@ -36,7 +36,7 @@ private[ml] object IsolationTreeNode extends java.io.Serializable {
     * @return Double; the estimated depth.
     */
   def pathLength(row: Row, rootOption: Option[IsolationTreeNode], depth: Double = 0.0): Double = {
-    if (rootOption.isEmpty) throw new NoSuchElementException("A non-full binary tree has grown.")
+    if (rootOption.isEmpty) throw new NoSuchElementException(s"A non-full binary tree has grown. (Depth=$depth)")
     else {
       val root = rootOption.get
       if (root.left.isEmpty && root.right.isEmpty) {
@@ -132,8 +132,9 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
         IsolationTreeNode.pathLength(_: Row, rootOptionBr.value))
       pathLengthUDF(functions.struct(allColumns: _*)).as("pathLength" + i)
     }
+    val treeSizeBr = sqlContext.sparkContext.broadcast(trees(0).modelOption.get.size)
     val anomalyScoreUDF = sqlContext.udf.register("anomalyScore",
-      IsolationTreeNode.anomalyScore(_: Double, trees(0).modelOption.get.size))
+      IsolationTreeNode.anomalyScore(_: Double, treeSizeBr.value))
     val anomalyScore = (
       anomalyScoreUDF(pathLengthColumns.reduce(_ + _) / functions.lit(treeCount))
     ).as("anomalyScore")
@@ -159,6 +160,7 @@ class IsolationForest(data: DataFrame, treeCount: Int, samplingSize: Int) {
   val size = data.count
   val samplingFraction = samplingSize.toDouble / size
   val maxDepth = math.ceil(math.log(samplingSize) / math.log(2)).toInt
+  val withReplacement = samplingFraction > (1.0 / treeCount)
 
   /**
     * Train the model.
@@ -167,7 +169,7 @@ class IsolationForest(data: DataFrame, treeCount: Int, samplingSize: Int) {
     */
   def fit = new IsolationForestModel(
     for (i <- 1 to treeCount)
-      yield new IsolationTree(data.sample(false, samplingFraction), maxDepth).fit
+      yield new IsolationTree(data.sample(withReplacement, samplingFraction), maxDepth).fit
   )
 }
 
