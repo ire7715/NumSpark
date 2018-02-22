@@ -152,7 +152,19 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
     ).as("anomalyScore")
     testset.select((allColumns ++ pathLengthColumns): _*)
     .select((allColumns :+ anomalyScore): _*)
-    .orderBy(anomalyScore.desc)
+  }
+
+  /**
+    * Predict a the anomaly by given threshold.
+    *
+    * @param testset: the dataset to be predicted
+    * @param threshold: the threshold to be predict, which should between 0 and 1.
+    * @return the origin dataframe with a new column "isOulier"
+    */
+  def predict(testset: DataFrame, threshold: Double = 0.6): DataFrame = {
+    import org.apache.spark.sql.functions._
+    transform(testset).withColumn("isOutlier", col("anomalyScore") >= lit(threshold))
+    .drop("anomalyScore")
   }
 
   /**

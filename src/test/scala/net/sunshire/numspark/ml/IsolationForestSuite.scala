@@ -152,7 +152,8 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
     }
   }
 
-  test("anomaly detection") {
+  test("anomaly score") {
+    import org.apache.spark.sql.functions._
     val iterationNumber = 10
     val expectedRate = 0.6
     val anomalyData = sqlContext.createDataFrame(
@@ -162,9 +163,35 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       val forest = new IsolationForest(anomalyData, 5, 10)
       val model = forest.fit
       val predicted = model.transform(anomalyData)
-      val topN = predicted.drop("anomalyScore").take(abnormalSeq.length)
+      val topN = predicted.orderBy(col("anomalyScore").desc)
+      .drop("anomalyScore")
+      .take(abnormalSeq.length)
       for (row <- topN) {
         val i = abnormalSeq.indexOf(row)
+        if (i >= 0) scoringBoard(i) = scoringBoard(i) + 1
+      }
+    }
+    for ((score, i) <- scoringBoard.zipWithIndex) {
+      val location = (abnormalSeq(i).apply(0), abnormalSeq(i).apply(1))
+      assert(score >= iterationNumber * expectedRate, s"Row(${location._1}, ${location._2})" +
+        s" be detected only $score times," +
+        s" ${(iterationNumber * expectedRate).toInt} times expected")
+    }
+  }
+
+  test("predict") {
+    val iterationNumber = 10
+    val expectedRate = 0.8
+    val anomalyData = sqlContext.createDataFrame(
+      sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
+    var scoringBoard = Array.fill[Int](abnormalSeq.length)(0)
+    for (i <- 1 to iterationNumber) {
+      val forest = new IsolationForest(anomalyData, 5, 10)
+      val model = forest.fit
+      val predicted = model.predict(anomalyData)
+      val outliers = predicted.filter("isOutlier").drop("isOutlier").collect
+      for (outlier <- outliers) {
+        val i = abnormalSeq.indexOf(outlier)
         if (i >= 0) scoringBoard(i) = scoringBoard(i) + 1
       }
     }
