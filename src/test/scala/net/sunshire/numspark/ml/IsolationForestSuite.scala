@@ -117,4 +117,54 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       }
     }
   }
+
+  test("anomaly detection") {
+    val iterationNumber = 10
+    val expectedRate = 0.6
+    val normalSeq = Seq(
+      Row(0.0, 1),
+      Row(0.0, 2),
+      Row(0.0, 1),
+      Row(0.0, 2),
+      Row(0.0, 1),
+      Row(0.0, 2),
+      Row(0.0, 1),
+      Row(0.0, 2),
+      Row(1.0, 2),
+      Row(1.0, 1),
+      Row(1.0, 1),
+      Row(1.0, 2),
+      Row(1.0, 2),
+      Row(1.0, 1),
+      Row(1.0, 1),
+      Row(1.0, 2))
+    val abnormalSeq = Seq(
+      Row(1.0, 100),
+      Row(0.0, 200),
+      Row(0.0, -100),
+      Row(1.0, -200))
+    val anomalySchema = StructType(Seq(
+      StructField("double", DoubleType),
+      StructField("int", IntegerType)
+    ))
+    val anomalyData = sqlContext.createDataFrame(
+      sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
+    var scoringBoard = Array.fill[Int](abnormalSeq.length)(0)
+    for (i <- 1 to iterationNumber) {
+      val forest = new IsolationForest(anomalyData, 5, 10)
+      val model = forest.fit
+      val predicted = model.transform(anomalyData)
+      val topN = predicted.drop("anomalyScore").take(abnormalSeq.length)
+      for (row <- topN) {
+        val i = abnormalSeq.indexOf(row)
+        if (i >= 0) scoringBoard(i) = scoringBoard(i) + 1
+      }
+    }
+    for ((score, i) <- scoringBoard.zipWithIndex) {
+      val location = (abnormalSeq(i).apply(0), abnormalSeq(i).apply(1))
+      assert(score >= iterationNumber * expectedRate, s"Row(${location._1}, ${location._2})" +
+        s" be detected only $score times," +
+        s" ${(iterationNumber * expectedRate).toInt} times expected")
+    }
+  }
 }
