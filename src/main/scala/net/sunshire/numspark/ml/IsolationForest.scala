@@ -4,7 +4,7 @@ import java.util.NoSuchElementException
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.feature.StringIndexer
 import org.apache.spark.ml.{Pipeline}
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession, SQLContext}
 import org.apache.spark.sql.types._
 import net.sunshire.numspark.utils.ExtendedRandom._
 import scala.math
@@ -30,6 +30,81 @@ private[ml] case class IsolationTreeNode(
     * to test if a node is an external node.
     */
   lazy val isExternal = (value == null)
+
+  /**
+    * flatten the tree, transform it into a Seq
+    *
+    * @param treeId: the id of which the root belongs to
+    * @param index: the index of this tree
+    * @return NodeData and its index sequence
+    */
+  private[ml] def toSeq(treeId: Int, index: Int): Seq[IsolationTreeNodeData] = {
+    val leftId = if (left == null) 0 else index * 2
+    val rightId = if (right == null) 0 else index * 2 + 1
+    val root = Seq(IsolationTreeNodeData(treeId, index, IsolationTreeNodeData.column2tuple(column),
+      value, size, leftId, rightId))
+    val leftSeq = if (leftId == 0) Nil else left.toSeq(treeId, leftId)
+    val rightSeq = if (rightId == 0) Nil else right.toSeq(treeId, rightId)
+    root ++
+    leftSeq.asInstanceOf[Seq[IsolationTreeNodeData]] ++
+    rightSeq.asInstanceOf[Seq[IsolationTreeNodeData]]
+  }
+
+  /**
+    * flatten the tree, transform it into a Seq
+    *
+    * @param treeId: the id of which the root belongs to
+    * @return NodeData and its index sequence
+    */
+  def toSeq(treeId: Int): Seq[IsolationTreeNodeData] = toSeq(treeId, 1)
+}
+
+/**
+  * NodeData represents flatten tree, for storage usage.
+  *
+  * @param treeId: the id of this tree
+  * @param index: the node index in the tree, root is 1, left-child is {{index * 2}}, right-child is {{index * 2 + 1}}
+  * @param column: represents column using Tuple4, [Name, DataType, Nullable, Metadata] respetively. DataType and Metadata applies json to reconstruct.
+  * @param value
+  * @param size
+  * @param leftId: the index of the left child
+  * @param rightId: the index of the right chlid
+  */
+private[ml] case class IsolationTreeNodeData(
+    treeId: Int,
+    index: Int,
+    column: (String, String, Boolean, String),
+    value: Any,
+    size: Long,
+    leftId: Int,
+    rightId: Int) extends java.io.Serializable {
+  /**
+    * test this node is external node
+    */
+  lazy val isExternal = leftId == 0 && rightId == 0
+}
+
+private[ml] object IsolationTreeNodeData extends java.io.Serializable {
+  /**
+    * transform StructField to Tuple4
+    *
+    * @param column: the StructField to be transformed
+    * @return each field represents a value of StructField. Name, DataType, Nullable, and Metadata respectively.
+    */
+  def column2tuple(column: StructField): (String, String, Boolean, String) = {
+    if (column == null) null
+    else (column.name, column.dataType.json, column.nullable, column.metadata.json)
+  }
+
+  /**
+    * reverse of column2tuple
+    *
+    * @param tuple
+    */
+  def tuple2column(tuple: (String, String, Boolean, String)): StructField = {
+    if (tuple == null) null
+    else StructField(tuple._1, DataType.fromJson(tuple._2), tuple._3, Metadata.fromJson(tuple._4))
+  }
 }
 
 private[ml] object IsolationTreeExternalNode {
@@ -259,15 +334,16 @@ class IsolationTreeModel(root: IsolationTreeNode) {
   }
 
   /**
-    * Write the model to file system.
+    * save the model to file system.
     *
+    * @param sc: the [[SparkContext]] which is going to be applied
     * @param path: the path for the model storage.
+    * @param treeId: the tree id
     */
-  def write(path: String) {
-    import java.io._
-    val oos = new ObjectOutputStream(new FileOutputStream(path))
-    oos.writeObject(root)
-    oos.close
+  def save(sc: SparkContext, path: String, treeId: Int = 0) {
+    val rootData = root.toSeq(treeId)
+    val dataRDD = sc.parallelize(rootData)
+    dataRDD.saveAsObjectFile(path)
   }
 
   def printModel {
@@ -389,12 +465,35 @@ object IsolationTree {
     * @param path: the path to the existent model file.
     * @return the tree model
     */
-  def readModel(path: String): IsolationTreeModel = {
-    import java.io._
-    val ois = new ObjectInputStream(new FileInputStream(path))
-    val root = ois.readObject.asInstanceOf[IsolationTreeNode]
-    ois.close
-    new IsolationTreeModel(root)
+  def load(sc: SparkContext, path: String): IsolationTreeModel = {
+    val dataRDD = sc.objectFile[IsolationTreeNodeData](path)
+    new IsolationTreeModel(constructTree(dataRDD.collect))
+  }
+
+  /**
+    * Construct tree from sequence of node data.
+    *
+    * @param nodes
+    */
+  private[ml] def constructTree(nodes: Seq[IsolationTreeNodeData]): IsolationTreeNode = {
+    val dataMap = nodes.map(node => node.index -> node).toMap
+    constructNode(1, dataMap)
+  }
+
+  /**
+    * from node data map to build a tree
+    *
+    * @param index: curent node index
+    * @param dataMap: the node data map
+    */
+  private[ml] def constructNode(
+      index: Int,
+      dataMap: Map[Int, IsolationTreeNodeData]): IsolationTreeNode = {
+    val nodeData = dataMap(index)
+    if (nodeData.isExternal) IsolationTreeExternalNode(nodeData.size)
+    else new IsolationTreeNode(IsolationTreeNodeData.tuple2column(nodeData.column),
+      nodeData.value, nodeData.size,
+      constructNode(index * 2, dataMap), constructNode(index * 2 + 1, dataMap))
   }
 }
 

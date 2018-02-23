@@ -11,7 +11,7 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
   var sqlContext: SQLContext = _
   var schema: StructType = _
   var data: DataFrame = _
-  val modelPath = "/tmp/model"
+  val modelPath = "/tmp/numspark/model"
   val normalSeq = Seq(
     Row(0.0, 1),
     Row(0.0, 2),
@@ -57,9 +57,10 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
   }
 
   after {
-    import java.io._
+    import java.io.File
+    import org.apache.commons.io.FileUtils
     val modelFilePointer = new File(modelPath)
-    modelFilePointer.delete
+    FileUtils.deleteDirectory(modelFilePointer)
   }
 
   test("IsolationTree.columnAndBoundary") {
@@ -208,9 +209,9 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
     val tree = new IsolationTree(anomalyData, 2)
     val model = tree.fit
-    model.write(modelPath)
-    val readModel = IsolationTree.readModel(modelPath)
-    val anomalies = readModel.transform(anomalyData)
+    model.save(sc, modelPath)
+    val loaded = IsolationTree.load(sc, modelPath)
+    val anomalies = loaded.transform(anomalyData)
   }
 
   test("write/read forest model") {
