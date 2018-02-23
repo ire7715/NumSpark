@@ -219,8 +219,8 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       sc.parallelize(normalSeq ++ abnormalSeq), anomalySchema)
     val forest = new IsolationForest(anomalyData, 5, 10)
     val model = forest.fit
-    model.write(modelPath)
-    val readModel = IsolationForest.readModel(modelPath)
-    val anomalies = readModel.transform(anomalyData)
+    model.save(sc, modelPath)
+    val loaded = IsolationForest.load(sc, modelPath)
+    val anomalies = loaded.transform(anomalyData)
   }
 }

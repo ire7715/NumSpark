@@ -243,15 +243,15 @@ class IsolationForestModel(trees: Seq[IsolationTreeModel]) {
   }
 
   /**
-    * Write the forest to the file system.
+    * Save the forest to the file system.
     *
+    * @param sc: [[SparkContext]]
     * @param path: the path to save the model.
     */
-  def write(path: String) {
-    import java.io._
-    val oos = new ObjectOutputStream(new FileOutputStream(path))
-    oos.writeObject(trees.map(_.model))
-    oos.close
+  def save(sc: SparkContext, path: String) {
+    val nodedata = trees.zipWithIndex.flatMap{ case (tree, index) => tree.model.toSeq(index) }
+    val dataRDD = sc.parallelize(nodedata)
+    dataRDD.saveAsObjectFile(path)
   }
 
   def printModel {
@@ -264,15 +264,17 @@ object IsolationForest {
   /**
     * Read the model from file system.
     *
+    * @param sc: [[SparkContext]]
     * @param path: the path to the existent model file.
     * @return the forest model
     */
-  def readModel(path: String): IsolationForestModel = {
-    import java.io._
-    val ois = new ObjectInputStream(new FileInputStream(path))
-    val roots = ois.readObject.asInstanceOf[Seq[IsolationTreeNode]]
-    ois.close
-    new IsolationForestModel(roots.map(new IsolationTreeModel(_)))
+  def load(sc: SparkContext, path: String): IsolationForestModel = {
+    val dataRDD = sc.objectFile[IsolationTreeNodeData](path)
+    val trees = dataRDD.map{ nodeData => (nodeData.treeId, Seq(nodeData)) }
+    .reduceByKey(_ ++ _).map{ case (key, nodes) =>
+      IsolationTree.constructTree(nodes)
+    }.collect
+    new IsolationForestModel(trees.map(new IsolationTreeModel(_)))
   }
 }
 
