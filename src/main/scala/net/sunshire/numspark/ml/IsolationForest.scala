@@ -372,13 +372,13 @@ object IsolationTree {
     (for (column <- columns) yield {
       column.dataType match {
         case BooleanType =>
-          (column,
+          Option((column,
             row.getAs[Boolean](column.name + "Min"),
-            row.getAs[Boolean](column.name + "Max"))
+            row.getAs[Boolean](column.name + "Max")))
         case ByteType =>
-          (column,
+          Option((column,
             row.getAs[Byte](column.name + "Min"),
-            row.getAs[Byte](column.name + "Max"))
+            row.getAs[Byte](column.name + "Max")))
         // case DateType =>
         //   (column,
         //     row.getAs[java.sql.Date](column.name + "Min"),
@@ -388,28 +388,28 @@ object IsolationTree {
         //     row.getAs[Decimal](column.name + "Min"),
         //     row.getAs[Decimal](column.name + "Max"))
         case DoubleType =>
-          (column,
+          Option((column,
             row.getAs[Double](column.name + "Min"),
-            row.getAs[Double](column.name + "Max"))
+            row.getAs[Double](column.name + "Max")))
         case FloatType =>
-          (column,
+          Option((column,
             row.getAs[Float](column.name + "Min"),
-            row.getAs[Float](column.name + "Max"))
+            row.getAs[Float](column.name + "Max")))
         case IntegerType =>
-          (column,
+          Option((column,
             row.getAs[Int](column.name + "Min"),
-            row.getAs[Int](column.name + "Max"))
+            row.getAs[Int](column.name + "Max")))
         case LongType =>
-          (column,
+          Option((column,
             row.getAs[Long](column.name + "Min"),
-            row.getAs[Long](column.name + "Max"))
+            row.getAs[Long](column.name + "Max")))
         case ShortType =>
-          (column,
+          Option((column,
             row.getAs[Short](column.name + "Min"),
-            row.getAs[Short](column.name + "Max"))
-        case _ => throw new Exception(column.name + " is not a numerical column.")
+            row.getAs[Short](column.name + "Max")))
+        case _ => None
       }
-    })
+    }).flatten
   }
 
   /**

@@ -42,6 +42,7 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
   before {
     sqlContext = new SQLContext(sc)
     schema = StructType(Seq(
+      StructField("id", StringType),
       StructField("bool", BooleanType),
       StructField("byte", ByteType),
       StructField("double", DoubleType),
@@ -51,8 +52,8 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       StructField("short", ShortType)
     ))
     data = sqlContext.createDataFrame(sc.parallelize(Seq(
-      Row(false, 1.toByte, 1.0, (1.0).toFloat, 1, 1.toLong, 1.toShort),
-      Row(true, 2.toByte, 2.0, (2.0).toFloat, 2, 2.toLong, 2.toShort)
+      Row("A", false, 1.toByte, 1.0, (1.0).toFloat, 1, 1.toLong, 1.toShort),
+      Row("B", true, 2.toByte, 2.0, (2.0).toFloat, 2, 2.toLong, 2.toShort)
     )), schema)
   }
 
@@ -91,7 +92,6 @@ class IsolationForestSuite extends FunSuite with BeforeAndAfter with SharedSpark
       "long" -> (1.toLong, 2.toLong),
       "short" -> (1.toShort, 2.toShort)
     )
-    val schema = data.schema
     for ((name, values) <- expectedRange) {
       val column = schema.apply(name)
       val (pivot, left, right): (Any, DataFrame, DataFrame) = IsolationTree.randomPivot(
