@@ -5,7 +5,7 @@ lazy val root = (project in file(".")).settings(
   scalaVersion := "2.11.12",
 
   sparkVersion := "2.2.0",
-  sparkComponents += "sql",
+  sparkComponents ++= Seq("mllib", "sql"),
 
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.0",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.0" % Test,
